@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -e
+[ -n "$GOENV_DEBUG" ] && set -x
+
+shell="$(basename "${GOENV_SHELL:-$SHELL}")"
+
+# Parse command line flags
+for arg; do
+  case "$arg" in
+  -n | --noop ) noop=true ;;
+  -v | --verbose ) verbose=true ;;
+  -q | --quiet | --silent ) quiet=true ;;
+  * )
+    echo "command goenv update $@"
+    exit ;;
+  esac
+done
+
+colorize() {
+  if [ "$shell" = fish ]; then echo "  if isatty stdout; set_color --bold; end"
+  else echo "  if [ -t 1 ]; then printf \"\\e[1;32m\"; fi;"; fi
+
+  echo "  printf \"$1\";"
+
+  if [ "$shell" = fish ]; then echo "  set_color normal"
+  else echo "  if [ -t 1 ]; then printf \"\\e[0m\"; fi;"; fi
+
+  echo "  printf \"$2\";"
+}
+
+case "$shell" in
+  fish )
+    echo "if command goenv update $@"
+      if [ -z "$quiet" ]; then colorize "Reloading goenv\n"; fi
+      if [ -z "$noop" ];  then echo "  source (goenv init -|psub)"; fi
+      if [ -z "$quiet" ]; then colorize " | " "done\n"; fi
+    echo "end" ;;
+  * )
+    echo "if command goenv update $@; then"
+      if [ -z "$quiet" ]; then colorize "Reloading goenv\n"; fi
+      if [ -z "$noop" ];  then echo "  eval \"\$(goenv init -)\";"; fi
+      if [ -z "$quiet" ]; then colorize " | " "done\n"; fi
+    echo "fi;" ;;
+esac

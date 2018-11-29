@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Usage: goenv update [--noop|--verbose|--quiet]
+# Summary: Updates to latest version of goenv and plugins from git.
+set -e
+[ -n "$GOENV_DEBUG" ] && set -x
+
+# Parse command line flags
+# Provide goenv completions
+noop=""
+verbose=""
+quiet=""
+for arg; do
+  case "$arg" in
+  -n | --noop ) noop=true ;;
+  -v | --verbose ) verbose=true ;;
+  -q | --quiet | --silent ) quiet=true ;;
+  --complete )
+    echo --noop
+    echo --quiet
+    echo --verbose
+    exit ;;
+  --help )
+    exec goenv-help update
+    ;;
+  * )
+    goenv-help --usage update >&2
+    exit 1 ;;
+  esac
+done
+
+# Set colored output for TTY
+if [ -t 1 ]; then
+  color="\e[1;32m"
+  reset="\e[0m"
+else
+  color=""
+  reset=""
+fi
+
+# Helper functions
+indent_output() {
+  while read -r data; do
+    printf " ${color}|${reset}  %s\n" "$data"
+  done
+}
+
+print_colored() {
+  if [ -z "$quiet" ]; then
+    printf "${color}%s${reset}\n" "$1"
+  fi
+}
+
+git() {
+  if [ -n "$noop" ]; then
+    # print would-be command
+    echo git "$@" | indent_output
+  elif [ -n "$quiet" ]; then
+    # mute stdout and stderr
+    command git "$@" &>/dev/null
+  elif [ -n "$verbose" ]; then
+    # indent stdout and stderr
+    command git "$@" 2>&1 | indent_output
+  else
+    # mute stdout, indent stderr
+    command git "$@" 2>&1 >/dev/null | indent_output
+  fi
+}
+
+is_goenv_git_repo() {
+  command git remote -v 2>/dev/null | grep -q 'goenv\|go-build'
+}
+
+goenv_update() {
+  if is_goenv_git_repo; then
+    print_colored "Updating $1"
+    git pull --no-rebase --ff
+  else
+    print_colored "Skipping $1; not an goenv git repo"
+  fi
+}
+
+# Main script
+if [ -n "$noop" ] && [ -n "$quiet" ]; then
+  quiet=""
+  print_colored "Both --noop and --quiet given; ignoring --quiet" >&2
+fi
+
+cd "$(dirname "$(which goenv)")"
+goenv_update goenv
+
+shopt -s nullglob
+for plugin in "$GOENV_ROOT"/plugins/*; do
+  pushd "$plugin" >/dev/null
+  goenv_update "$(basename "$plugin")"
+  popd >/dev/null
+done
+shopt -u nullglob
